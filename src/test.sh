@@ -21,4 +21,8 @@ assert 42 42
 assert 21 "5+20-4"
 assert 41 " 12 + 34 - 5 "
 
+# Error
+# assert 0 " 12 + 34++"
+# assert 0 " 12 + 34a"
+
 echo OK
