@@ -12,22 +12,24 @@ struct Token {
     kind: TokenKind,
     val: usize,
     str: Vec<char>,
+    pos: usize // Parser.user_inputにおけるこのトークンの開始位置
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, val: usize, str: Vec<char>) -> Self {
-        Token {kind, val, str}
+    pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize) -> Self {
+        Token {kind, val, str, pos}
     }
 }
 
 struct Parser {
     tokens: Vec<Token>,
-    pos: usize, // 現在位置
+    pos: usize, // 現在何番目のトークンを見ているか
+    user_input: String
 }
 
 impl Parser  {
-    pub fn new(tokens: Vec<Token>, pos: usize) -> Self {
-        Parser {tokens, pos}
+    pub fn new(tokens: Vec<Token>, pos: usize, user_input: String) -> Self {
+        Parser {tokens, pos, user_input}
     }
 
     fn consume(&mut self, op: char) -> bool {
@@ -42,7 +44,7 @@ impl Parser  {
     fn expect(&mut self, op: char) {
         let token = &self.tokens[self.pos];
         if token.kind != TokenKind::TK_RESERVED || token.str[0] != op {
-            error(&format!("{}ではありません", op));
+            error(&self.user_input, &token.pos, &format!("{}ではありません", op));
         }
         self.pos += 1;
     }
@@ -50,7 +52,7 @@ impl Parser  {
     fn expect_number(&mut self) -> usize {
         let token = &self.tokens[self.pos];
         if token.kind != TokenKind::TK_NUM {
-            error("数ではありません");
+            error(&self.user_input, &token.pos, "数ではありません");
         }
         let val = token.val;
         self.pos += 1;
@@ -62,10 +64,16 @@ impl Parser  {
         token.kind == TokenKind::TK_EOF
     }
 
-    fn new_token(&mut self, kind: TokenKind, val: Option<usize>, str: Vec<char>) {
+    fn new_token(
+        &mut self,
+        kind: TokenKind,
+        val: Option<usize>, // EOFの場合Noneになる
+        str: Vec<char>,
+        pos: usize
+    ) {
         match val {
-            Some(v) => self.tokens.push(Token::new(kind, v, str)),
-            None => self.tokens.push(Token::new(kind, 0, str)),
+            Some(v) => self.tokens.push(Token::new(kind, v, str, pos)),
+            None => self.tokens.push(Token::new(kind, 0, str, pos)),
         };
     }
 
@@ -82,7 +90,7 @@ impl Parser  {
             }
 
             if t == '+' || t == '-' {
-                self.new_token(TokenKind::TK_RESERVED, None, vec![t]);
+                self.new_token(TokenKind::TK_RESERVED, None, vec![t], p);
                 p += 1;
                 continue;
             }
@@ -99,19 +107,21 @@ impl Parser  {
             if chars.len() > 0 {
                 let numstr: String = chars.iter().collect();
                 let num = Some(numstr.parse::<usize>().unwrap());
-                self.new_token(TokenKind::TK_NUM, num, chars);
+                self.new_token(TokenKind::TK_NUM, num, chars, p);
                 continue;
             }
 
-            error("トークナイズできません。")
+            error(&self.user_input, &p,"トークナイズできません。")
         }
 
-        self.new_token(TokenKind::TK_EOF, None, vec![]);
+        self.new_token(TokenKind::TK_EOF, None, vec![], p);
     }
 }
 
-fn error(fmt: &str) -> ! {
-    eprintln!("{}", fmt);
+fn error(user_input: &String, loc: &usize, fmt: &str) -> ! {
+    eprintln!("{}", user_input);
+    eprint!("{}", " ".repeat(*loc));
+    eprintln!("^ {}", fmt);
     process::exit(1);
 }
 
@@ -122,7 +132,7 @@ fn main() {
         process::exit(1);
     }
 
-    let mut parser: Parser = Parser::new(vec![], 0);
+    let mut parser: Parser = Parser::new(vec![], 0, args[1].clone());
     parser.tokenize(args[1].clone());
 
     print!(".intel_syntax noprefix\n");
