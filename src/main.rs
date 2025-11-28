@@ -3,9 +3,9 @@ use std::process;
 
 #[derive(PartialEq, Eq)]
 enum TokenKind {
-    TK_RESERVED,
-    TK_NUM,
-    TK_EOF,
+    TkReserved,
+    TkNum,
+    TkEof,
 }
 
 struct Token {
@@ -34,7 +34,7 @@ impl Parser  {
 
     fn consume(&mut self, op: char) -> bool {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TK_RESERVED || token.str[0] != op {
+        if token.kind != TokenKind::TkReserved || token.str[0] != op {
             return false;
         }
         self.pos += 1;
@@ -43,7 +43,7 @@ impl Parser  {
 
     fn expect(&mut self, op: char) {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TK_RESERVED || token.str[0] != op {
+        if token.kind != TokenKind::TkReserved || token.str[0] != op {
             error(&self.user_input, &token.pos, &format!("{}ではありません", op));
         }
         self.pos += 1;
@@ -51,7 +51,7 @@ impl Parser  {
 
     fn expect_number(&mut self) -> usize {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TK_NUM {
+        if token.kind != TokenKind::TkNum {
             error(&self.user_input, &token.pos, "数ではありません");
         }
         let val = token.val;
@@ -61,7 +61,7 @@ impl Parser  {
 
     fn at_eof(&self) -> bool {
         let token = &self.tokens[self.pos];
-        token.kind == TokenKind::TK_EOF
+        token.kind == TokenKind::TkEof
     }
 
     fn new_token(
@@ -90,7 +90,7 @@ impl Parser  {
             }
 
             if t == '+' || t == '-' {
-                self.new_token(TokenKind::TK_RESERVED, None, vec![t], p);
+                self.new_token(TokenKind::TkReserved, None, vec![t], p);
                 p += 1;
                 continue;
             }
@@ -107,14 +107,14 @@ impl Parser  {
             if chars.len() > 0 {
                 let numstr: String = chars.iter().collect();
                 let num = Some(numstr.parse::<usize>().unwrap());
-                self.new_token(TokenKind::TK_NUM, num, chars, p);
+                self.new_token(TokenKind::TkNum, num, chars, p);
                 continue;
             }
 
             error(&self.user_input, &p,"トークナイズできません。")
         }
 
-        self.new_token(TokenKind::TK_EOF, None, vec![], p);
+        self.new_token(TokenKind::TkEof, None, vec![], p);
     }
 }
 
