@@ -8,28 +8,72 @@ enum TokenKind {
     TkEof,
 }
 
+enum NodeKind {
+    NdAdd,
+    NdSub,
+    NdMul,
+    NdDiv,
+    NdNum,
+}
+
 struct Token {
     kind: TokenKind,
     val: usize,
     str: Vec<char>,
-    pos: usize // Parser.user_inputにおけるこのトークンの開始位置
+    pos: usize, // tokenizer.user_inputにおけるこのトークンの開始位置
 }
 
 impl Token {
     pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize) -> Self {
-        Token {kind, val, str, pos}
+        Token {
+            kind,
+            val,
+            str,
+            pos,
+        }
     }
 }
 
-struct Parser {
-    tokens: Vec<Token>,
-    pos: usize, // 現在何番目のトークンを見ているか
-    user_input: String
+struct Node {
+    kind: NodeKind,
+    lhs: Option<Box<Node>>,
+    rhs: Option<Box<Node>>,
+    val: Option<usize>,
 }
 
-impl Parser  {
+impl Node {
+    pub fn new_node(kind: NodeKind, lhs: Node, rhs: Node) -> Self {
+        Node {
+            kind,
+            lhs: Some(Box::new(lhs)),
+            rhs: Some(Box::new(rhs)),
+            val: None,
+        }
+    }
+
+    pub fn new_node_num(val: usize) -> Self {
+        Node {
+            kind: NodeKind::NdNum,
+            lhs: None,
+            rhs: None,
+            val: Some(val),
+        }
+    }
+}
+
+struct Tokenizer {
+    tokens: Vec<Token>,
+    pos: usize, // 現在何番目のトークンを見ているか
+    user_input: String,
+}
+
+impl Tokenizer {
     pub fn new(tokens: Vec<Token>, pos: usize, user_input: String) -> Self {
-        Parser {tokens, pos, user_input}
+        Tokenizer {
+            tokens,
+            pos,
+            user_input,
+        }
     }
 
     fn consume(&mut self, op: char) -> bool {
@@ -44,7 +88,11 @@ impl Parser  {
     fn expect(&mut self, op: char) {
         let token = &self.tokens[self.pos];
         if token.kind != TokenKind::TkReserved || token.str[0] != op {
-            error(&self.user_input, &token.pos, &format!("{}ではありません", op));
+            error(
+                &self.user_input,
+                &token.pos,
+                &format!("{}ではありません", op),
+            );
         }
         self.pos += 1;
     }
@@ -69,7 +117,7 @@ impl Parser  {
         kind: TokenKind,
         val: Option<usize>, // EOFの場合Noneになる
         str: Vec<char>,
-        pos: usize
+        pos: usize,
     ) {
         match val {
             Some(v) => self.tokens.push(Token::new(kind, v, str, pos)),
@@ -111,10 +159,58 @@ impl Parser  {
                 continue;
             }
 
-            error(&self.user_input, &p,"トークナイズできません。")
+            error(&self.user_input, &p, "トークナイズできません。")
         }
 
         self.new_token(TokenKind::TkEof, None, vec![], p);
+    }
+}
+
+struct Parser {
+    tokenizer: Tokenizer,
+}
+
+impl Parser {
+    pub fn new(tokenizer: Tokenizer) -> Self {
+        Parser { tokenizer }
+    }
+
+    pub fn expr(&mut self) -> Node {
+        let mut node: Node = self.mul();
+
+        loop {
+            if self.tokenizer.consume('+') {
+                node = Node::new_node(NodeKind::NdAdd, node, self.mul());
+            } else if self.tokenizer.consume('-') {
+                node = Node::new_node(NodeKind::NdSub, node, self.mul());
+            } else {
+                return node;
+            }
+        }
+    }
+
+    pub fn mul(&mut self) -> Node {
+        let mut node: Node = self.primary();
+
+        loop {
+            if self.tokenizer.consume('*') {
+                node = Node::new_node(NodeKind::NdMul, node, self.primary());
+            } else if self.tokenizer.consume('-') {
+                node = Node::new_node(NodeKind::NdDiv, node, self.primary());
+            } else {
+                return node;
+            }
+        }
+    }
+
+    pub fn primary(&mut self) -> Node {
+        if self.tokenizer.consume('(') {
+            let node: Node = self.expr();
+            self.tokenizer.expect(')');
+            return node;
+        }
+
+        return Node::new_node_num(self.tokenizer.expect_number());
     }
 }
 
@@ -132,23 +228,23 @@ fn main() {
         process::exit(1);
     }
 
-    let mut parser: Parser = Parser::new(vec![], 0, args[1].clone());
-    parser.tokenize(args[1].clone());
+    let mut tokenizer: Tokenizer = Tokenizer::new(vec![], 0, args[1].clone());
+    tokenizer.tokenize(args[1].clone());
 
     print!(".intel_syntax noprefix\n");
     print!(".globl main\n");
     print!("main:\n");
 
-    print!("  mov rax, {}\n", parser.expect_number());
+    print!("  mov rax, {}\n", tokenizer.expect_number());
 
-    while !parser.at_eof() {
-        if parser.consume('+') {
-            print!("  add rax, {}\n", parser.expect_number());
+    while !tokenizer.at_eof() {
+        if tokenizer.consume('+') {
+            print!("  add rax, {}\n", tokenizer.expect_number());
             continue;
         }
 
-        parser.expect('-');
-        print!("  sub rax, {}\n", parser.expect_number());
+        tokenizer.expect('-');
+        print!("  sub rax, {}\n", tokenizer.expect_number());
     }
 
     print!("  ret\n");
