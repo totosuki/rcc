@@ -196,7 +196,7 @@ impl Parser {
         loop {
             if self.tokenizer.consume('*') {
                 node = Node::new_node(NodeKind::NdMul, node, self.primary());
-            } else if self.tokenizer.consume('-') {
+            } else if self.tokenizer.consume('/') {
                 node = Node::new_node(NodeKind::NdDiv, node, self.primary());
             } else {
                 return node;
