@@ -8,6 +8,7 @@ enum TokenKind {
     TkEof,
 }
 
+#[derive(PartialEq, Eq)]
 enum NodeKind {
     NdAdd,
     NdSub,
@@ -137,7 +138,7 @@ impl Tokenizer {
                 continue;
             }
 
-            if t == '+' || t == '-' {
+            if t == '+' || t == '-' || t == '*' || t == '/' || t == '(' || t == ')' {
                 self.new_token(TokenKind::TkReserved, None, vec![t], p);
                 p += 1;
                 continue;
@@ -214,6 +215,38 @@ impl Parser {
     }
 }
 
+fn generate(node: Node) {
+    if node.kind == NodeKind::NdNum {
+        print!("  push {}\n", node.val.unwrap());
+        return;
+    }
+
+    generate(*node.lhs.unwrap());
+    generate(*node.rhs.unwrap());
+
+    print!("  pop rdi\n");
+    print!("  pop rax\n");
+
+    match node.kind {
+        NodeKind::NdAdd => {
+            print!("  add rax, rdi\n");
+        }
+        NodeKind::NdSub => {
+            print!("  sub rax, rdi\n");
+        }
+        NodeKind::NdMul => {
+            print!("  imul rax, rdi\n");
+        }
+        NodeKind::NdDiv => {
+            print!("  cqo\n");
+            print!("  idiv rdi\n");
+        }
+        _ => (),
+    }
+
+    print!("  push rax\n");
+}
+
 fn error(user_input: &String, loc: &usize, fmt: &str) -> ! {
     eprintln!("{}", user_input);
     eprint!("{}", " ".repeat(*loc));
@@ -230,22 +263,15 @@ fn main() {
 
     let mut tokenizer: Tokenizer = Tokenizer::new(vec![], 0, args[1].clone());
     tokenizer.tokenize(args[1].clone());
+    let mut parser: Parser = Parser::new(tokenizer);
+    let node: Node = parser.expr();
 
     print!(".intel_syntax noprefix\n");
     print!(".globl main\n");
     print!("main:\n");
 
-    print!("  mov rax, {}\n", tokenizer.expect_number());
+    generate(node);
 
-    while !tokenizer.at_eof() {
-        if tokenizer.consume('+') {
-            print!("  add rax, {}\n", tokenizer.expect_number());
-            continue;
-        }
-
-        tokenizer.expect('-');
-        print!("  sub rax, {}\n", tokenizer.expect_number());
-    }
-
+    print!("  pop rax\n");
     print!("  ret\n");
 }
