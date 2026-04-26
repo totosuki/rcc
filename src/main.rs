@@ -191,16 +191,26 @@ impl Parser {
     }
 
     pub fn mul(&mut self) -> Node {
-        let mut node: Node = self.primary();
+        let mut node: Node = self.unary();
 
         loop {
             if self.tokenizer.consume('*') {
-                node = Node::new_node(NodeKind::NdMul, node, self.primary());
+                node = Node::new_node(NodeKind::NdMul, node, self.unary());
             } else if self.tokenizer.consume('/') {
-                node = Node::new_node(NodeKind::NdDiv, node, self.primary());
+                node = Node::new_node(NodeKind::NdDiv, node, self.unary());
             } else {
                 return node;
             }
+        }
+    }
+
+    pub fn unary(&mut self) -> Node {
+        if self.tokenizer.consume('+') {
+            self.primary()
+        } else if self.tokenizer.consume('-') {
+            Node::new_node(NodeKind::NdSub, Node::new_node_num(0), self.primary())
+        } else {
+            self.primary()
         }
     }
 
@@ -211,7 +221,7 @@ impl Parser {
             return node;
         }
 
-        return Node::new_node_num(self.tokenizer.expect_number());
+        Node::new_node_num(self.tokenizer.expect_number())
     }
 }
 
