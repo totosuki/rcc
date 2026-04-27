@@ -15,6 +15,10 @@ enum NodeKind {
     NdMul,
     NdDiv,
     NdNum,
+    NdEQ,
+    NdNE,
+    NdLT,
+    NdLE,
 }
 
 struct Token {
@@ -198,6 +202,42 @@ impl Parser {
     }
 
     pub fn expr(&mut self) -> Node {
+        self.euqality()
+    }
+
+    pub fn euqality(&mut self) -> Node {
+        let mut node: Node = self.relational();
+
+        loop {
+            if self.tokenizer.consume(&['=', '=']) {
+                node = Node::new_node(NodeKind::NdEQ, node, self.relational());
+            } else if self.tokenizer.consume(&['!', '=']) {
+                node = Node::new_node(NodeKind::NdNE, node, self.relational());
+            } else {
+                return node;
+            }
+        }
+    }
+
+    pub fn relational(&mut self) -> Node {
+        let mut node: Node = self.add();
+
+        loop {
+            if self.tokenizer.consume(&['<']) {
+                node = Node::new_node(NodeKind::NdLT, node, self.add());
+            } else if self.tokenizer.consume(&['<', '=']) {
+                node = Node::new_node(NodeKind::NdLE, node, self.add());
+            } else if self.tokenizer.consume(&['>']) {
+                node = Node::new_node(NodeKind::NdLT, self.add(), node);
+            } else if self.tokenizer.consume(&['>', '=']) {
+                node = Node::new_node(NodeKind::NdLE, self.add(), node);
+            } else {
+                return node;
+            }
+        }
+    }
+
+    pub fn add(&mut self) -> Node {
         let mut node: Node = self.mul();
 
         loop {
@@ -271,6 +311,26 @@ fn generate(node: Node) {
         NodeKind::NdDiv => {
             print!("  cqo\n");
             print!("  idiv rdi\n");
+        }
+        NodeKind::NdEQ => {
+            print!("  cmp rax, rdi\n");
+            print!("  sete al\n");
+            print!("  movzb rax, al\n");
+        }
+        NodeKind::NdNE => {
+            print!("  cmp rax, rdi\n");
+            print!("  setne al\n");
+            print!("  movzb rax, al\n");
+        }
+        NodeKind::NdLT => {
+            print!("  cmp rax, rdi\n");
+            print!("  setl al\n");
+            print!("  movzb rax, al\n");
+        }
+        NodeKind::NdLE => {
+            print!("  cmp rax, rdi\n");
+            print!("  setle al\n");
+            print!("  movzb rax, al\n");
         }
         _ => (),
     }
