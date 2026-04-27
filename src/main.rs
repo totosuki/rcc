@@ -3,22 +3,22 @@ use std::process;
 
 #[derive(PartialEq, Eq)]
 enum TokenKind {
-    TkReserved,
-    TkNum,
-    TkEof,
+    Reserved,
+    Num,
+    Eof,
 }
 
 #[derive(PartialEq, Eq)]
 enum NodeKind {
-    NdAdd,
-    NdSub,
-    NdMul,
-    NdDiv,
-    NdNum,
-    NdEQ,
-    NdNE,
-    NdLT,
-    NdLE,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Num,
+    EQ,
+    NE,
+    LT,
+    LE,
 }
 
 struct Token {
@@ -26,17 +26,15 @@ struct Token {
     val: usize, // kindがTkNumの場合
     str: Vec<char>,
     pos: usize, // tokenizer.user_inputにおけるこのトークンの開始位置
-    len: usize,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize, len: usize) -> Self {
+    pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize) -> Self {
         Token {
             kind,
             val,
             str,
             pos,
-            len,
         }
     }
 }
@@ -60,7 +58,7 @@ impl Node {
 
     pub fn new_node_num(val: usize) -> Self {
         Node {
-            kind: NodeKind::NdNum,
+            kind: NodeKind::Num,
             lhs: None,
             rhs: None,
             val: Some(val),
@@ -85,7 +83,7 @@ impl Tokenizer {
 
     fn consume(&mut self, op: &[char]) -> bool {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TkReserved || token.str != op {
+        if token.kind != TokenKind::Reserved || token.str != op {
             return false;
         }
         self.pos += 1;
@@ -94,7 +92,7 @@ impl Tokenizer {
 
     fn expect(&mut self, op: &[char]) {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TkReserved || token.str != op {
+        if token.kind != TokenKind::Reserved || token.str != op {
             error(
                 &self.user_input,
                 &token.pos,
@@ -106,7 +104,7 @@ impl Tokenizer {
 
     fn expect_number(&mut self) -> usize {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TkNum {
+        if token.kind != TokenKind::Num {
             error(&self.user_input, &token.pos, "数ではありません");
         }
         let val = token.val;
@@ -116,7 +114,7 @@ impl Tokenizer {
 
     fn at_eof(&self) -> bool {
         let token = &self.tokens[self.pos];
-        token.kind == TokenKind::TkEof
+        token.kind == TokenKind::Eof
     }
 
     fn new_token(
@@ -125,11 +123,10 @@ impl Tokenizer {
         val: Option<usize>, // EOFの場合Noneになる
         str: Vec<char>,
         pos: usize,
-        len: usize,
     ) {
         match val {
-            Some(v) => self.tokens.push(Token::new(kind, v, str, pos, len)),
-            None => self.tokens.push(Token::new(kind, 0, str, pos, len)),
+            Some(v) => self.tokens.push(Token::new(kind, v, str, pos)),
+            None => self.tokens.push(Token::new(kind, 0, str, pos)),
         };
     }
 
@@ -150,29 +147,21 @@ impl Tokenizer {
                 || text[p..].starts_with(&['>', '='])
                 || text[p..].starts_with(&['<', '='])
             {
-                self.new_token(
-                    TokenKind::TkReserved,
-                    None,
-                    vec![text[p], text[p + 1]],
-                    p,
-                    2,
-                );
+                self.new_token(TokenKind::Reserved, None, vec![text[p], text[p + 1]], p);
                 p += 2;
                 continue;
             }
 
             if "+-*/()><".contains(t) {
-                self.new_token(TokenKind::TkReserved, None, vec![t], p, 1);
+                self.new_token(TokenKind::Reserved, None, vec![t], p);
                 p += 1;
                 continue;
             }
 
             let mut chars: Vec<char> = vec![];
-            let mut len: usize = 0;
             while t.is_digit(10) {
                 chars.push(t);
                 p += 1;
-                len += 1;
                 if p >= text.len() {
                     break;
                 }
@@ -181,14 +170,14 @@ impl Tokenizer {
             if chars.len() > 0 {
                 let numstr: String = chars.iter().collect();
                 let num = Some(numstr.parse::<usize>().unwrap());
-                self.new_token(TokenKind::TkNum, num, chars, p, len);
+                self.new_token(TokenKind::Num, num, chars, p);
                 continue;
             }
 
             error(&self.user_input, &p, "トークナイズできません。")
         }
 
-        self.new_token(TokenKind::TkEof, None, vec![], p, 1);
+        self.new_token(TokenKind::Eof, None, vec![], p);
     }
 }
 
@@ -210,9 +199,9 @@ impl Parser {
 
         loop {
             if self.tokenizer.consume(&['=', '=']) {
-                node = Node::new_node(NodeKind::NdEQ, node, self.relational());
+                node = Node::new_node(NodeKind::EQ, node, self.relational());
             } else if self.tokenizer.consume(&['!', '=']) {
-                node = Node::new_node(NodeKind::NdNE, node, self.relational());
+                node = Node::new_node(NodeKind::NE, node, self.relational());
             } else {
                 return node;
             }
@@ -224,13 +213,13 @@ impl Parser {
 
         loop {
             if self.tokenizer.consume(&['<']) {
-                node = Node::new_node(NodeKind::NdLT, node, self.add());
+                node = Node::new_node(NodeKind::LT, node, self.add());
             } else if self.tokenizer.consume(&['<', '=']) {
-                node = Node::new_node(NodeKind::NdLE, node, self.add());
+                node = Node::new_node(NodeKind::LE, node, self.add());
             } else if self.tokenizer.consume(&['>']) {
-                node = Node::new_node(NodeKind::NdLT, self.add(), node);
+                node = Node::new_node(NodeKind::LT, self.add(), node);
             } else if self.tokenizer.consume(&['>', '=']) {
-                node = Node::new_node(NodeKind::NdLE, self.add(), node);
+                node = Node::new_node(NodeKind::LE, self.add(), node);
             } else {
                 return node;
             }
@@ -242,9 +231,9 @@ impl Parser {
 
         loop {
             if self.tokenizer.consume(&['+']) {
-                node = Node::new_node(NodeKind::NdAdd, node, self.mul());
+                node = Node::new_node(NodeKind::Add, node, self.mul());
             } else if self.tokenizer.consume(&['-']) {
-                node = Node::new_node(NodeKind::NdSub, node, self.mul());
+                node = Node::new_node(NodeKind::Sub, node, self.mul());
             } else {
                 return node;
             }
@@ -256,9 +245,9 @@ impl Parser {
 
         loop {
             if self.tokenizer.consume(&['*']) {
-                node = Node::new_node(NodeKind::NdMul, node, self.unary());
+                node = Node::new_node(NodeKind::Mul, node, self.unary());
             } else if self.tokenizer.consume(&['/']) {
-                node = Node::new_node(NodeKind::NdDiv, node, self.unary());
+                node = Node::new_node(NodeKind::Div, node, self.unary());
             } else {
                 return node;
             }
@@ -269,7 +258,7 @@ impl Parser {
         if self.tokenizer.consume(&['+']) {
             self.primary()
         } else if self.tokenizer.consume(&['-']) {
-            Node::new_node(NodeKind::NdSub, Node::new_node_num(0), self.primary())
+            Node::new_node(NodeKind::Sub, Node::new_node_num(0), self.primary())
         } else {
             self.primary()
         }
@@ -287,7 +276,7 @@ impl Parser {
 }
 
 fn generate(node: Node) {
-    if node.kind == NodeKind::NdNum {
+    if node.kind == NodeKind::Num {
         print!("  push {}\n", node.val.unwrap());
         return;
     }
@@ -299,35 +288,35 @@ fn generate(node: Node) {
     print!("  pop rax\n");
 
     match node.kind {
-        NodeKind::NdAdd => {
+        NodeKind::Add => {
             print!("  add rax, rdi\n");
         }
-        NodeKind::NdSub => {
+        NodeKind::Sub => {
             print!("  sub rax, rdi\n");
         }
-        NodeKind::NdMul => {
+        NodeKind::Mul => {
             print!("  imul rax, rdi\n");
         }
-        NodeKind::NdDiv => {
+        NodeKind::Div => {
             print!("  cqo\n");
             print!("  idiv rdi\n");
         }
-        NodeKind::NdEQ => {
+        NodeKind::EQ => {
             print!("  cmp rax, rdi\n");
             print!("  sete al\n");
             print!("  movzb rax, al\n");
         }
-        NodeKind::NdNE => {
+        NodeKind::NE => {
             print!("  cmp rax, rdi\n");
             print!("  setne al\n");
             print!("  movzb rax, al\n");
         }
-        NodeKind::NdLT => {
+        NodeKind::LT => {
             print!("  cmp rax, rdi\n");
             print!("  setl al\n");
             print!("  movzb rax, al\n");
         }
-        NodeKind::NdLE => {
+        NodeKind::LE => {
             print!("  cmp rax, rdi\n");
             print!("  setle al\n");
             print!("  movzb rax, al\n");
