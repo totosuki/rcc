@@ -277,54 +277,54 @@ impl Parser {
 
 fn generate(node: Node) {
     if node.kind == NodeKind::Num {
-        print!("  push {}\n", node.val.unwrap());
+        println!("  push {}", node.val.unwrap());
         return;
     }
 
     generate(*node.lhs.unwrap());
     generate(*node.rhs.unwrap());
 
-    print!("  pop rdi\n");
-    print!("  pop rax\n");
+    println!("  pop rdi");
+    println!("  pop rax");
 
     match node.kind {
         NodeKind::Add => {
-            print!("  add rax, rdi\n");
+            println!("  add rax, rdi");
         }
         NodeKind::Sub => {
-            print!("  sub rax, rdi\n");
+            println!("  sub rax, rdi");
         }
         NodeKind::Mul => {
-            print!("  imul rax, rdi\n");
+            println!("  imul rax, rdi");
         }
         NodeKind::Div => {
-            print!("  cqo\n");
-            print!("  idiv rdi\n");
+            println!("  cqo");
+            println!("  idiv rdi");
         }
         NodeKind::EQ => {
-            print!("  cmp rax, rdi\n");
-            print!("  sete al\n");
-            print!("  movzb rax, al\n");
+            println!("  cmp rax, rdi");
+            println!("  sete al");
+            println!("  movzb rax, al");
         }
         NodeKind::NE => {
-            print!("  cmp rax, rdi\n");
-            print!("  setne al\n");
-            print!("  movzb rax, al\n");
+            println!("  cmp rax, rdi");
+            println!("  setne al");
+            println!("  movzb rax, al");
         }
         NodeKind::LT => {
-            print!("  cmp rax, rdi\n");
-            print!("  setl al\n");
-            print!("  movzb rax, al\n");
+            println!("  cmp rax, rdi");
+            println!("  setl al");
+            println!("  movzb rax, al");
         }
         NodeKind::LE => {
-            print!("  cmp rax, rdi\n");
-            print!("  setle al\n");
-            print!("  movzb rax, al\n");
+            println!("  cmp rax, rdi");
+            println!("  setle al");
+            println!("  movzb rax, al");
         }
         _ => (),
     }
 
-    print!("  push rax\n");
+    println!("  push rax");
 }
 
 fn error(user_input: &String, loc: &usize, fmt: &str) -> ! {
@@ -337,7 +337,7 @@ fn error(user_input: &String, loc: &usize, fmt: &str) -> ! {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        eprint!("引数の個数が正しくありません\n");
+        eprintln!("引数の個数が正しくありません");
         process::exit(1);
     }
 
@@ -346,12 +346,12 @@ fn main() {
     let mut parser: Parser = Parser::new(tokenizer);
     let node: Node = parser.expr();
 
-    print!(".intel_syntax noprefix\n");
-    print!(".globl main\n");
-    print!("main:\n");
+    println!(".intel_syntax noprefix");
+    println!(".globl main");
+    println!("main:");
 
     generate(node);
 
-    print!("  pop rax\n");
-    print!("  ret\n");
+    println!("  pop rax");
+    println!("  ret");
 }
