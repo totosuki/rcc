@@ -19,18 +19,20 @@ enum NodeKind {
 
 struct Token {
     kind: TokenKind,
-    val: usize,
+    val: usize, // kindがTkNumの場合
     str: Vec<char>,
     pos: usize, // tokenizer.user_inputにおけるこのトークンの開始位置
+    len: usize,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize) -> Self {
+    pub fn new(kind: TokenKind, val: usize, str: Vec<char>, pos: usize, len: usize) -> Self {
         Token {
             kind,
             val,
             str,
             pos,
+            len,
         }
     }
 }
@@ -77,22 +79,22 @@ impl Tokenizer {
         }
     }
 
-    fn consume(&mut self, op: char) -> bool {
+    fn consume(&mut self, op: &[char]) -> bool {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TkReserved || token.str[0] != op {
+        if token.kind != TokenKind::TkReserved || token.str != op {
             return false;
         }
         self.pos += 1;
         true
     }
 
-    fn expect(&mut self, op: char) {
+    fn expect(&mut self, op: &[char]) {
         let token = &self.tokens[self.pos];
-        if token.kind != TokenKind::TkReserved || token.str[0] != op {
+        if token.kind != TokenKind::TkReserved || token.str != op {
             error(
                 &self.user_input,
                 &token.pos,
-                &format!("{}ではありません", op),
+                &format!("{}ではありません", String::from_iter(op)),
             );
         }
         self.pos += 1;
@@ -119,10 +121,11 @@ impl Tokenizer {
         val: Option<usize>, // EOFの場合Noneになる
         str: Vec<char>,
         pos: usize,
+        len: usize,
     ) {
         match val {
-            Some(v) => self.tokens.push(Token::new(kind, v, str, pos)),
-            None => self.tokens.push(Token::new(kind, 0, str, pos)),
+            Some(v) => self.tokens.push(Token::new(kind, v, str, pos, len)),
+            None => self.tokens.push(Token::new(kind, 0, str, pos, len)),
         };
     }
 
@@ -138,16 +141,34 @@ impl Tokenizer {
                 continue;
             }
 
-            if t == '+' || t == '-' || t == '*' || t == '/' || t == '(' || t == ')' {
-                self.new_token(TokenKind::TkReserved, None, vec![t], p);
+            if text[p..].starts_with(&['=', '='])
+                || text[p..].starts_with(&['!', '='])
+                || text[p..].starts_with(&['>', '='])
+                || text[p..].starts_with(&['<', '='])
+            {
+                self.new_token(
+                    TokenKind::TkReserved,
+                    None,
+                    vec![text[p], text[p + 1]],
+                    p,
+                    2,
+                );
+                p += 2;
+                continue;
+            }
+
+            if "+-*/()><".contains(t) {
+                self.new_token(TokenKind::TkReserved, None, vec![t], p, 1);
                 p += 1;
                 continue;
             }
 
             let mut chars: Vec<char> = vec![];
+            let mut len: usize = 0;
             while t.is_digit(10) {
                 chars.push(t);
                 p += 1;
+                len += 1;
                 if p >= text.len() {
                     break;
                 }
@@ -156,14 +177,14 @@ impl Tokenizer {
             if chars.len() > 0 {
                 let numstr: String = chars.iter().collect();
                 let num = Some(numstr.parse::<usize>().unwrap());
-                self.new_token(TokenKind::TkNum, num, chars, p);
+                self.new_token(TokenKind::TkNum, num, chars, p, len);
                 continue;
             }
 
             error(&self.user_input, &p, "トークナイズできません。")
         }
 
-        self.new_token(TokenKind::TkEof, None, vec![], p);
+        self.new_token(TokenKind::TkEof, None, vec![], p, 1);
     }
 }
 
@@ -180,9 +201,9 @@ impl Parser {
         let mut node: Node = self.mul();
 
         loop {
-            if self.tokenizer.consume('+') {
+            if self.tokenizer.consume(&['+']) {
                 node = Node::new_node(NodeKind::NdAdd, node, self.mul());
-            } else if self.tokenizer.consume('-') {
+            } else if self.tokenizer.consume(&['-']) {
                 node = Node::new_node(NodeKind::NdSub, node, self.mul());
             } else {
                 return node;
@@ -194,9 +215,9 @@ impl Parser {
         let mut node: Node = self.unary();
 
         loop {
-            if self.tokenizer.consume('*') {
+            if self.tokenizer.consume(&['*']) {
                 node = Node::new_node(NodeKind::NdMul, node, self.unary());
-            } else if self.tokenizer.consume('/') {
+            } else if self.tokenizer.consume(&['/']) {
                 node = Node::new_node(NodeKind::NdDiv, node, self.unary());
             } else {
                 return node;
@@ -205,9 +226,9 @@ impl Parser {
     }
 
     pub fn unary(&mut self) -> Node {
-        if self.tokenizer.consume('+') {
+        if self.tokenizer.consume(&['+']) {
             self.primary()
-        } else if self.tokenizer.consume('-') {
+        } else if self.tokenizer.consume(&['-']) {
             Node::new_node(NodeKind::NdSub, Node::new_node_num(0), self.primary())
         } else {
             self.primary()
@@ -215,9 +236,9 @@ impl Parser {
     }
 
     pub fn primary(&mut self) -> Node {
-        if self.tokenizer.consume('(') {
+        if self.tokenizer.consume(&['(']) {
             let node: Node = self.expr();
-            self.tokenizer.expect(')');
+            self.tokenizer.expect(&[')']);
             return node;
         }
 
